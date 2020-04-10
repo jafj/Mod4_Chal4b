@@ -75,9 +75,9 @@ from sklearn.preprocessing import OneHotEncoder, LabelEncoder
 from sklearn.compose import ColumnTransformer
 
 # Manually encode age, tumor-size, and inv-nodes
-X[:,0] = [int(re.match('([0-9])+', x).group(0)) for x in X[:,0]]
-X[:,2] = [int(re.match('([0-9])+', x).group(0)) for x in X[:,2]]
-X[:,3] = [int(re.match('([0-9])+', x).group(0)) for x in X[:,3]]
+X[:,0] = [int(re.match('([0-9]+)', x).group(0)) for x in X[:,0]]
+X[:,2] = [int(re.match('([0-9]+)', x).group(0)) for x in X[:,2]]
+X[:,3] = [int(re.match('([0-9]+)', x).group(0)) for x in X[:,3]]
 
 # Automatically encode remaining fields
 transformer = LabelEncoder()

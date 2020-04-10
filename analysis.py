@@ -152,7 +152,7 @@ else:
 # Optimal model determination
 #
 # ------------------------------------------------------------
-print("Optimal model determination...")
+print("Optimal non-linear classification model determination...")
 
 # The above shows this is a non-linear model. Let's try a selection of models
 # with a variety of trial kPCA-driven feature decompositions. As the data are
@@ -182,19 +182,23 @@ def run_grid_search(x_in, y_in, classifier, parameters, feature_dim):
 # All classifiers
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.tree import DecisionTreeClassifier
+from xgboost import XGBClassifier
 classifiers = {'kSVN': SVC(),
                'kNN': KNeighborsClassifier(),
-               'rand-forest': RandomForestClassifier()}
+               'decision-tree': DecisionTreeClassifier(),
+               'rand-forest': RandomForestClassifier(),
+               'xgboost': XGBClassifier()}
 
 # Record of search results
 model_search = {}
 
 # Search 2 to 12 feature dimensions
 from sklearn.decomposition import KernelPCA
-kSVN_best_accuracy = 0
-kNN_best_accuracy = 0
-rand_forest_best_accuracy = 0
-for i in range(2, 13):
+from sklearn.model_selection import cross_val_score
+best_xgboost_accuracy = 0
+for i in range(1, 13):
+   print('  kPCA features: {}'.format(i))
    # Run kPCA
    if i == 12:
       X_transformed = X_scaled
@@ -218,13 +222,29 @@ for i in range(2, 13):
                                          classifiers['kNN'],
                                          parameters, i)
    
-   # kNN
-   parameters = [{'n_estimators': [10, 25, 50, 75, 100],
+   # Decision Tree
+   parameters = [{'criterion': ['gini', 'entropy'],
+                  'splitter': ['best', 'random']}]
+   model_search['decision-tree'] = run_grid_search(X_transformed, y,
+                                                 classifiers['decision-tree'],
+                                                 parameters, i)
+   
+   # Random Forest
+   parameters = [{'n_estimators': [5, 10, 25, 50, 75, 100],
                   'criterion': ['gini', 'entropy']}]
    model_search['rand_forest'] = run_grid_search(X_transformed, y,
                                                  classifiers['rand-forest'],
                                                  parameters, i)
 
+   # XGBoost
+   parameters = [{'max_depth': [2, 3, 4],
+                  'n_estimators': [5, 10, 20],
+                  'learning_rate': [0.1, 0.01, 0.05]}]
+   model_search['xgboost'] = run_grid_search(X_transformed, y,
+                                             classifiers['xgboost'],
+                                             parameters, i)
+
+# Print details of the best model found
 best_model = None
 best_accuracy = 0
 for k in model_search:
@@ -232,75 +252,42 @@ for k in model_search:
       best_accuracy = model_search[k]['accuracy']
       best_model = k
 print('** The best model determined is {} with:'.format(best_model))
+print('**   Accuracy: {:.3f}'.format(model_search[best_model]['accuracy']))
 print('**   kPCA dimensions: {}'.format(model_search[best_model]['feature-dim']))
 print('**   Parameters: {}'.format(str(model_search[best_model]['params'])))
 
-"""
-# Splitting the dataset into the Training set and Test set
+# ------------------------------------------------------------
+#
+# Model confirmation
+#
+# ------------------------------------------------------------
+print('Model confirmation...')
+
+# Split dataset into training and sest sets
 from sklearn.model_selection import train_test_split
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.2,
+X_train, X_test, y_train, y_test = train_test_split(X_scaled, y,
+                                                    test_size = 0.25,
                                                     random_state = 0)
 
-# Feature Scaling
-from sklearn.preprocessing import StandardScaler
-sc = StandardScaler()
-X_train = sc.fit_transform(X_train)
-X_test = sc.transform(X_test)
+# Get our chosen classifier and configure it
+params = model_search[best_model]['params']
+classifier = classifiers[best_model].set_params(**params)
 
-# Applying PCA
-from sklearn.decomposition import PCA
-pca = PCA(n_components = 2)
-X_train = pca.fit_transform(X_train)
-X_test = pca.transform(X_test)
-explained_variance = pca.explained_variance_ratio_
+# Confirm k-fold validation on the training set
+from sklearn.model_selection import cross_val_score
+accuracies = cross_val_score(estimator = classifier,
+                             X = X_train, y = y_train,
+                             cv = 10)
+print('** k-fold validation accuracy on training set: {:.3f}'.format(accuracies.mean()))
 
-# Fitting Logistic Regression to the Training set
-from sklearn.linear_model import LogisticRegression
-classifier = LogisticRegression(random_state = 0)
+# Predict on test set
+print('** Predicting on test set')
 classifier.fit(X_train, y_train)
-
-# Predicting the Test set results
 y_pred = classifier.predict(X_test)
 
 # Making the Confusion Matrix
 from sklearn.metrics import confusion_matrix
 cm = confusion_matrix(y_test, y_pred)
 
-# Visualising the Training set results
-from matplotlib.colors import ListedColormap
-X_set, y_set = X_train, y_train
-X1, X2 = np.meshgrid(np.arange(start = X_set[:, 0].min() - 1,stop = X_set[:, 0].max() + 1, step = 0.01),
-                     np.arange(start = X_set[:, 1].min() - 1, stop = X_set[:, 1].max() + 1, step = 0.01))
-plt.contourf(X1, X2, classifier.predict(np.array([X1.ravel(), X2.ravel()]).T).reshape(X1.shape),
-             alpha = 0.75, cmap = ListedColormap(('red', 'blue')))
-plt.xlim(X1.min(), X1.max())
-plt.ylim(X2.min(), X2.max())
-for i, j in enumerate(np.unique(y_set)):
-    plt.scatter(X_set[y_set == j, 0], X_set[y_set == j, 1],
-                c = ListedColormap(('red', 'blue'))(i), label = j)
-plt.title('Logistic Regression (Training set)')
-plt.xlabel('PC1')
-plt.ylabel('PC2')
-plt.legend()
-plt.show()
-
-# Visualising the Test set results
-from matplotlib.colors import ListedColormap
-X_set, y_set = X_test, y_test
-X1, X2 = np.meshgrid(np.arange(start = X_set[:, 0].min() - 1, stop = X_set[:, 0].max() + 1, step = 0.01),
-                     np.arange(start = X_set[:, 1].min() - 1, stop = X_set[:, 1].max() + 1, step = 0.01))
-plt.contourf(X1, X2, classifier.predict(np.array([X1.ravel(), X2.ravel()]).T).reshape(X1.shape),
-             alpha = 0.75, cmap = ListedColormap(('red', 'green', 'blue')))
-plt.xlim(X1.min(), X1.max())
-plt.ylim(X2.min(), X2.max())
-for i, j in enumerate(np.unique(y_set)):
-    plt.scatter(X_set[y_set == j, 0], X_set[y_set == j, 1],
-                c = ListedColormap(('red', 'blue'))(i), label = j)
-plt.title('Logistic Regression (Test set)')
-plt.xlabel('PC1')
-plt.ylabel('PC2')
-plt.legend()
-plt.show()
-
-print("Accuracy: {}".format(np.sum(np.diag(cm)) / np.sum(cm)))
-"""
+print('** Confusion matrix:')
+print(cm)

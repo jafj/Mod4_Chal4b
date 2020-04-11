@@ -178,9 +178,17 @@ def run_grid_search(x_in, y_in, classifier,
    run_accuracy = grid_search.best_score_
    run_parameters = grid_search.best_params_
    if run_accuracy > best_parameters['accuracy']:
+      print('    {}: Replacing {:.3f} with {:.3f}'.format(
+                                             type(classifier).__name__,
+                                             best_parameters['accuracy'],
+                                             run_accuracy))
       return {'feature-dim': feature_dim,
               'accuracy': run_accuracy,
               'params': run_parameters}
+   print('    {}: Keeping accuracy {:.3f} (this run: {:.3f})'.format(
+                                             type(classifier).__name__,
+                                             best_parameters['accuracy'],
+                                             run_accuracy))
    return best_parameters
 
 # All classifiers
@@ -203,7 +211,6 @@ model_search = {'kSVN': {'accuracy': 0},
 
 # Search 2 to 12 feature dimensions
 from sklearn.decomposition import KernelPCA
-from sklearn.model_selection import cross_val_score
 best_xgboost_accuracy = 0
 for i in range(1, 13):
    print('  kPCA features: {}'.format(i))
@@ -246,7 +253,7 @@ for i in range(1, 13):
    # Random Forest
    parameters = [{'n_estimators': [5, 10, 25, 50, 75, 100],
                   'criterion': ['gini', 'entropy']}]
-   model_search['rand_forest'] = run_grid_search(X_transformed, y_train,
+   model_search['rand-forest'] = run_grid_search(X_transformed, y_train,
                                                  classifiers['rand-forest'],
                                                  parameters,
                                                  model_search['rand-forest'],

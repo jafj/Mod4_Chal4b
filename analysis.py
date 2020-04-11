@@ -156,9 +156,9 @@ print("Optimal non-linear classification model determination...")
 
 # The above shows this is a non-linear model. Let's try a selection of models
 # with a variety of trial kPCA-driven feature decompositions. As the data are
-# non-linear and we desire classification, look at K-NN, Random Forest and
-# Kernel SVN. Note using kPCA with rbf kernel as we believe the data is
-# non-linear
+# non-linear and we desire classification, look at K-NN, Decision Tress,
+# Random Forest, Kernel SVN and XGBoost. Note using kPCA with rbf kernel as we
+# believe the data is non-linear
 
 # Helper method to run a gridsearch for a given estimator and parameter set
 def run_grid_search(x_in, y_in, classifier, parameters, feature_dim):

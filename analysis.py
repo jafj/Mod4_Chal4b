@@ -109,7 +109,7 @@ X = transformer.fit_transform(X)[:,1:] # Avoiding dummy variable trap
 
 # ------------------------------------------------------------
 #
-# Feature scaling
+# Feature scaling and data splitting
 #
 # ------------------------------------------------------------
 print("Feature scaling...")
@@ -117,6 +117,12 @@ print("Feature scaling...")
 from sklearn.preprocessing import StandardScaler
 sc = StandardScaler()
 X_scaled = sc.fit_transform(X)
+
+# Split dataset into training and sest sets
+from sklearn.model_selection import train_test_split
+X_train, X_test, y_train, y_test = train_test_split(X_scaled, y,
+                                                    test_size = 0.25,
+                                                    random_state = 0)
 
 # ------------------------------------------------------------
 #
@@ -138,7 +144,7 @@ grid_search = GridSearchCV(estimator = classifier,
                            scoring = 'accuracy',
                            cv = 10,
                            n_jobs = -1)
-grid_search = grid_search.fit(X_scaled, y)
+grid_search = grid_search.fit(X_train, y_train)
 best_accuracy = grid_search.best_score_
 best_parameters = grid_search.best_params_
 
@@ -161,23 +167,21 @@ print("Optimal non-linear classification model determination...")
 # believe the data is non-linear
 
 # Helper method to run a gridsearch for a given estimator and parameter set
-def run_grid_search(x_in, y_in, classifier, parameters, feature_dim):
-   highest_accuracy = 0
-   best_parameters = None
+def run_grid_search(x_in, y_in, classifier,
+                    gs_parameters, best_parameters, feature_dim):
    grid_search = GridSearchCV(estimator = classifier,
-                              param_grid = parameters,
+                              param_grid = gs_parameters,
                               scoring = 'accuracy',
                               cv = 10,
                               n_jobs = -1)
    grid_search = grid_search.fit(x_in, y_in)
    run_accuracy = grid_search.best_score_
    run_parameters = grid_search.best_params_
-   if run_accuracy > highest_accuracy:
-      highest_accuracy = run_accuracy
-      best_parameters = run_parameters
-   return {'feature-dim': feature_dim,
-           'accuracy': highest_accuracy,
-           'params': best_parameters}
+   if run_accuracy > best_parameters['accuracy']:
+      return {'feature-dim': feature_dim,
+              'accuracy': run_accuracy,
+              'params': run_parameters}
+   return best_parameters
 
 # All classifiers
 from sklearn.neighbors import KNeighborsClassifier
@@ -191,7 +195,11 @@ classifiers = {'kSVN': SVC(),
                'xgboost': XGBClassifier()}
 
 # Record of search results
-model_search = {}
+model_search = {'kSVN': {'accuracy': 0},
+               'kNN': {'accuracy': 0},
+               'decision-tree': {'accuracy': 0},
+               'rand-forest': {'accuracy': 0},
+               'xgboost': {'accuracy': 0}}
 
 # Search 2 to 12 feature dimensions
 from sklearn.decomposition import KernelPCA
@@ -201,48 +209,58 @@ for i in range(1, 13):
    print('  kPCA features: {}'.format(i))
    # Run kPCA
    if i == 12:
-      X_transformed = X_scaled
+      X_transformed = X_train
    else:
       transformer = KernelPCA(n_components=i, kernel='rbf')
-      X_transformed = transformer.fit_transform(X_scaled)
+      X_transformed = transformer.fit_transform(X_train)
    
    # kSVN
    parameters = [{'C': [0.5, 0.75, 1, 1.25, 1.5, 1.75], 'kernel': ['rbf'],
                   'gamma': [0.05, 0.075, 0.1, 0.15, 0.175]}]
-   model_search['kSVN'] = run_grid_search(X_transformed, y,
+   model_search['kSVN'] = run_grid_search(X_transformed, y_train,
                                           classifiers['kSVN'],
-                                          parameters, i)
+                                          parameters,
+                                          model_search['kSVN'],
+                                          i)
    
    # kNN
    parameters = [{'n_neighbors': [5, 6, 7, 8, 9, 10, 11, 12],
                   'weights': ['uniform', 'distance'],
                   'metric': ['minkowski'],
                   'p': [2]}]
-   model_search['kNN'] = run_grid_search(X_transformed, y,
+   model_search['kNN'] = run_grid_search(X_transformed, y_train,
                                          classifiers['kNN'],
-                                         parameters, i)
+                                         parameters,
+                                         model_search['kNN'],
+                                         i)
    
    # Decision Tree
    parameters = [{'criterion': ['gini', 'entropy'],
                   'splitter': ['best', 'random']}]
-   model_search['decision-tree'] = run_grid_search(X_transformed, y,
+   model_search['decision-tree'] = run_grid_search(X_transformed, y_train,
                                                  classifiers['decision-tree'],
-                                                 parameters, i)
+                                                 parameters,
+                                                 model_search['decision-tree'],
+                                                 i)
    
    # Random Forest
    parameters = [{'n_estimators': [5, 10, 25, 50, 75, 100],
                   'criterion': ['gini', 'entropy']}]
-   model_search['rand_forest'] = run_grid_search(X_transformed, y,
+   model_search['rand_forest'] = run_grid_search(X_transformed, y_train,
                                                  classifiers['rand-forest'],
-                                                 parameters, i)
+                                                 parameters,
+                                                 model_search['rand-forest'],
+                                                 i)
 
    # XGBoost
    parameters = [{'max_depth': [2, 3, 4],
                   'n_estimators': [5, 10, 20],
                   'learning_rate': [0.1, 0.01, 0.05]}]
-   model_search['xgboost'] = run_grid_search(X_transformed, y,
+   model_search['xgboost'] = run_grid_search(X_transformed, y_train,
                                              classifiers['xgboost'],
-                                             parameters, i)
+                                             parameters,
+                                             model_search['xgboost'],
+                                             i)
 
 # Print details of the best model found
 best_model = None
@@ -263,12 +281,6 @@ print('**   Parameters: {}'.format(str(model_search[best_model]['params'])))
 # ------------------------------------------------------------
 print('Model confirmation...')
 
-# Split dataset into training and sest sets
-from sklearn.model_selection import train_test_split
-X_train, X_test, y_train, y_test = train_test_split(X_scaled, y,
-                                                    test_size = 0.25,
-                                                    random_state = 0)
-
 # Get our chosen classifier and configure it
 params = model_search[best_model]['params']
 classifier = classifiers[best_model].set_params(**params)
@@ -288,6 +300,8 @@ y_pred = classifier.predict(X_test)
 # Making the Confusion Matrix
 from sklearn.metrics import confusion_matrix
 cm = confusion_matrix(y_test, y_pred)
+accuracy = np.sum(np.diag(cm)) / np.sum(cm)
 
 print('** Confusion matrix:')
 print(cm)
+print('** Test set accuracy: {:.3f}'.format(accuracy))

@@ -290,7 +290,8 @@ from sklearn.model_selection import cross_val_score
 accuracies = cross_val_score(estimator = classifier,
                              X = X_train, y = y_train,
                              cv = 10)
-print('** k-fold validation accuracy on training set: {:.3f}'.format(accuracies.mean()))
+msg = '** k-fold validation accuracy on training set: {:.3f}'
+print(msg.format(accuracies.mean()))
 
 # Predict on test set
 print('** Predicting on test set')

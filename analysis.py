@@ -46,6 +46,14 @@ dataset = pd.read_excel(url, dtype = datatypes, usecols = 'A:F,H:K')
 # Clean the data
 #
 # ------------------------------------------------------------
+"""
+# 1. Load and clean data
+
+Data is loaded from a public Github repository. Cleaning is undertaken to
+restore those data fields mis-identified as dates to their correctly-ordered
+groupings, inferred by looking at the correctly interpreted categorical data
+values.
+"""
 print("Cleaning data...")
 
 # Remove entries with node-caps == '?'

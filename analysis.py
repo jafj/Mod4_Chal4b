@@ -332,11 +332,14 @@ for k in model_search:
    if model_search[k]['accuracy'] > best_accuracy:
       best_accuracy = model_search[k]['accuracy']
       best_model = k
+print()
+print('******************************************')
 print('** The best model determined is {} with:'.format(best_model))
 print('**   Accuracy: {:.3f}'.format(model_search[best_model]['accuracy']))
 print('**   kPCA dimensions: {}'.format(model_search[best_model]['feature-dim']))
 print('**   Parameters: {}'.format(str(model_search[best_model]['params'])))
-
+print('******************************************')
+print()
 # ------------------------------------------------------------
 #
 # Model confirmation

@@ -5,6 +5,20 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import re
 
+"""
+### **Overall strategy:**
+
+1.   Load and clean data
+2.   Encode categorical data, perform feature scaling, and split in to
+     training and test sets
+3.   Determine if data is linear or non-linear
+4.   Run grid search (with k-fold cross validation) on appropriate linear or
+     non-linear models to determine best model selection, testing all possible
+     kPCA feature reduction dimensions
+5.   Confirm model (through k-fold validation) from Step 5 on training data
+     subset, and then test with testing data subset
+"""
+
 # ------------------------------------------------------------
 #
 # Import dataset
@@ -69,6 +83,21 @@ X[:,3] = [clean_inv_nodes(x) for x in X[:,3]]
 # Encode catagorical data
 #
 # ------------------------------------------------------------
+"""
+Data assumptions and impution strategy:
+
+*  *Age*, *Tumor Size* and *Inv Nodes* should be considered ordered categories
+   in terms of model fitting (inferred from implicitly ordered groupings in
+   data) - Replace entries with lower bound of data category as integer
+*  *Node Caps* should be a binary category, but 2.8% of entries are unknown.
+   Using OneHotEncoder, even removing one produced feature, will therefore
+   result in highly-correlated new features. Therefore remove all 8 unknown
+   entries.
+*  *Menopause* and *Breast Quad* are unordered categories - transform with
+   OneHotEncoder
+*  *Irradiat* is a binary categoy - transform with LabelEncoder
+*  Left or Right breast has no clinical significance - ignore *Breast* column
+"""
 print("Encoding catagorical data...")
 
 from sklearn.preprocessing import OneHotEncoder, LabelEncoder
@@ -129,6 +158,13 @@ X_train, X_test, y_train, y_test = train_test_split(X_scaled, y,
 # Data linearity detection
 #
 # ------------------------------------------------------------
+"""
+# 3. Data linearity detection
+
+At this stage, the SCV model is tested with both a linear and rbf kernel to
+determine if the data is linear or non-linear. Only the SVC kernal type is
+considered at this point - model optimisation will occur in the next step.
+"""
 print("Linearity detection...")
 
 # Apply Grid Search (with k-value folding) to determine if the model is linear
@@ -136,9 +172,7 @@ print("Linearity detection...")
 from sklearn.svm import SVC
 from sklearn.model_selection import GridSearchCV
 classifier = SVC()
-parameters = [{'C': [0.01, 1, 10], 'kernel': ['linear']},
-              {'C': [0.01, 1, 10], 'kernel': ['rbf'],
-               'gamma': [0.5, 0.1, 0.01, 0.001, 0.0001]}]
+parameters = {'kernel': ['linear', 'rbf']}
 grid_search = GridSearchCV(estimator = classifier,
                            param_grid = parameters,
                            scoring = 'accuracy',
@@ -158,13 +192,27 @@ else:
 # Optimal model determination
 #
 # ------------------------------------------------------------
-print("Optimal non-linear classification model determination...")
+"""
+# 4. Optimal model determination
 
-# The above shows this is a non-linear model. Let's try a selection of models
-# with a variety of trial kPCA-driven feature decompositions. As the data are
-# non-linear and we desire classification, look at K-NN, Decision Tress,
-# Random Forest, Kernel SVN and XGBoost. Note using kPCA with rbf kernel as we
-# believe the data is non-linear
+Strategy at this step is to take the key non-linear classification models, and
+run them with an embedded grid search technique. In the outer loop, use kPCA
+to reduce the input set dimensionality between 1 and 12, and for every
+determined kPCA-optimised input set, run a grid search over a wide range of
+model parameters.
+
+The models under consideration are kSVN, kNN, Decision Tree, Random Forest,
+and XGBoost, with search parameters as defined in the code below.
+
+A record of the best model result it kept in the model_search dictionary. For
+every kPCA dimension, the best grid-search result for each model is compared
+with the current best observed model, and if the accuracy is better, the
+dimensionality and model parameters are recorded.
+
+Following the complete execution of the search strategy, the best of all the
+models is selected.
+"""
+print("Optimal non-linear classification model determination...")
 
 # Helper method to run a gridsearch for a given estimator and parameter set
 def run_grid_search(x_in, y_in, classifier,
@@ -286,6 +334,17 @@ print('**   Parameters: {}'.format(str(model_search[best_model]['params'])))
 # Model confirmation
 #
 # ------------------------------------------------------------
+"""
+# 5. Model confirmation
+
+Now take the best selected model and parameter set, and run two verificaion
+tests:
+
+1.  Run k-fold validation on the training set to confirm the grid search
+    accuracy
+2.  Train the model on the data, and predict the results of the test set. Use
+    a confusion matrix to determine the model performance.
+"""
 print('Model confirmation...')
 
 # Get our chosen classifier and configure it
